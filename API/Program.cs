@@ -1,3 +1,4 @@
+using Core.Interfaces;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,6 +16,9 @@ builder.Services.AddDbContext<StoreContext>(opt => //this is the options from th
     opt.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
+//lifetime is scoped to life of http request
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -27,5 +31,18 @@ if (app.Environment.IsDevelopment())
 app.UseAuthorization();
 
 app.MapControllers();
+
+using var scope = app.Services.CreateScope();
+//dbcontext is scoped service the same way as an http request (from using keyword)
+var services = scope.ServiceProvider;
+var context = services.GetRequiredService<StoreContext>();
+var logger = services.GetRequiredService<ILogger<Program>>();
+try {
+    await context.Database.MigrateAsync();
+    await StoreContextSeed.SeedAsync(context);
+}
+catch (Exception ex) {
+    logger.LogError(ex, "An error occured during migration");
+}
 
 app.Run();
